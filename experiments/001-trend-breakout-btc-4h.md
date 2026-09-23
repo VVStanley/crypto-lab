@@ -120,7 +120,7 @@ Conclusion: <keep / revise / reject>
 Current Research baseline:
 
 ```text
-Git commit: 9c1e2a10164ef55873328b96d0bf50342c74bc74
+Git commit: 8fd2506f2b2052404a176ac2abec4be10925cdfe
 Freqtrade version: 2026.8
 Timerange: 20180101-20230101
 Backtest artifact: user_data/backtest_results/backtest-result-2026-09-23_08-22-47.zip
