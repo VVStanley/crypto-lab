@@ -8,6 +8,8 @@ services:
       - ./secrets:/freqtrade/secrets:ro
     command:
       - trade
+      - --logfile
+      - /freqtrade/user_data/logs/trend-breakout-v1-dry.log
       - --config
       - /freqtrade/configs/base.json
       - --config

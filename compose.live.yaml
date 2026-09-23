@@ -12,3 +12,5 @@ services:
       - /freqtrade/secrets/binance.json
       - --strategy
       - TrendBreakoutV1
+      - --logfile
+      - /freqtrade/user_data/logs/trend-breakout-v1-live.log

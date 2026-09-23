@@ -1,4 +1,4 @@
-.PHONY: pull download backtest strategy-check dry-run live logs stop ps config
+.PHONY: doctor pull download backtest strategy-check dry-run live logs stop ps config
 
 pull:
 	docker compose pull
@@ -29,3 +29,6 @@ ps:
 
 config:
 	docker compose config
+
+doctor:
+	./scripts/doctor.sh
