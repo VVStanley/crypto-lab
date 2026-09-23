@@ -1,6 +1,6 @@
 # Experiment 001 — TrendBreakoutV1 / BTC-USDT / 4h
 
-Status: **research — final robustness gate pending**
+Status: **research complete — ready for validation**
 
 ## Hypothesis
 
@@ -120,12 +120,14 @@ Conclusion: <keep / revise / reject>
 Current Research baseline:
 
 ```text
-Git commit: eb39bb019f8988cff03150a795d1248206665f1f
+Git commit: 9c1e2a10164ef55873328b96d0bf50342c74bc74
 Freqtrade version: 2026.8
 Timerange: 20180101-20230101
 Backtest artifact: user_data/backtest_results/backtest-result-2026-09-23_08-22-47.zip
 Strategy check log: user_data/logs/experiment-001-strategy-check-499.txt
-Conclusion: keep
+Sensitivity log: user_data/logs/experiment-001-sensitivity-check.txt
+Sensitivity backtest artifact: user_data/backtest_results/backtest-result-2026-09-23_08-46-43.zip
+Conclusion: keep baseline and proceed to Validation
 ```
 
 ## Evaluation windows
@@ -299,9 +301,67 @@ Interpretation:
 
 The concentration check does not invalidate the hypothesis, but it confirms that performance should not be judged by win rate or by a short live sample.
 
-## Current research conclusion
+### Parameter sensitivity
 
-The current TrendBreakoutV1 Research configuration is:
+The final Research robustness check varied one parameter at a time around the locked baseline. It was not used to search for the most profitable combination.
+
+Baseline:
+
+```text
+EMA fast = 50
+EMA slow = 200
+breakout = 20
+```
+
+Tested neighbors:
+
+- EMA fast: 40 and 60
+- EMA slow: 180 and 220
+- breakout: 15 and 25
+
+All seven runs used:
+
+```text
+2018-01-01 — 2022-12-31
+BTC/USDT
+4h
+Spot / long only
+startup_candle_count = 499
+```
+
+Results:
+
+| Variant | Trades | Total profit | Profit factor | Closed-trade drawdown | Wallet drawdown |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Baseline 50 / 200 / 20 | 62 | +190.60% | 3.72 | 3.87% | 19.16% |
+| EMA fast 40 | 69 | +176.80% | 3.19 | 4.03% | 11.28% |
+| EMA fast 60 | 58 | +181.20% | 3.56 | 4.11% | 20.89% |
+| EMA slow 180 | 64 | +183.32% | 3.34 | 4.65% | 17.81% |
+| EMA slow 220 | 60 | +193.54% | 4.04 | 3.66% | 17.96% |
+| Breakout 15 | 69 | +190.81% | 3.38 | 4.41% | 19.15% |
+| Breakout 25 | 55 | +168.84% | 3.26 | 4.61% | 18.78% |
+
+Interpretation:
+
+- every nearby single-parameter variant remained profitable over the full Research window;
+- trade counts stayed in a reasonably narrow range of 55–69 versus 62 for baseline;
+- all tested variants retained profit factor above 3;
+- closed-trade drawdown remained close to baseline;
+- wallet drawdown remained of the same general magnitude and did not reveal a nearby parameter cliff;
+- the baseline was not the most profitable tested point: EMA slow 220 and breakout 15 slightly exceeded it on total profit;
+- therefore the observed Research result is not isolated to the exact `50 / 200 / 20` combination.
+
+Decision:
+
+```text
+Keep EMA 50 / 200 / breakout 20 unchanged.
+```
+
+No parameter is changed as a result of this check. The purpose was robustness validation, not optimization.
+
+## Research conclusion
+
+The locked TrendBreakoutV1 configuration entering Validation is:
 
 ```text
 BTC/USDT
@@ -314,26 +374,39 @@ startup_candle_count: 499
 Spot / long only
 ```
 
-Completed Research checks:
+Completed Research gates:
 
 - broad 2018–2022 baseline;
 - fee-inclusive backtest;
-- drawdown measurement;
+- trade-count and drawdown review;
 - lookahead-analysis;
 - recursive-analysis;
 - startup-candle stabilization;
-- profit-concentration analysis.
+- profit-concentration analysis;
+- local parameter-sensitivity analysis.
 
-Current interpretation:
+Research interpretation:
 
-TrendBreakoutV1 shows the return shape expected from a simple trend-following system: more losing trades than winning trades, but materially larger winners. The Research result is not a one-trade artifact, although it does depend on catching a relatively small number of large trends.
+TrendBreakoutV1 shows the return shape expected from a simple trend-following system: more losing trades than winning trades, but materially larger winners. The Research result is not a one-trade artifact and it remains broadly similar under modest single-parameter perturbations.
 
-The strategy must not be treated as proven profitable or as having an expected future return of +190.6%.
+The strategy still depends on catching occasional large BTC trends. That is a structural property of this strategy and must be considered when interpreting future dry-run or live performance.
 
-### Remaining Research gate
+The Research result does not prove future profitability and must not be treated as an expected return of +190.6%.
 
-The experiment's predefined protocol still requires a limited parameter-sensitivity check around the EMA and breakout values.
+## Research decision
 
-That check must use only the Research window and must answer whether the current result is reasonably stable around nearby parameter values, rather than search for the most profitable combination.
+```text
+KEEP
+```
 
-Do not inspect Validation, Out-of-sample, or Final holdout performance until this final Research gate is completed and the configuration is locked.
+The Research configuration is now locked.
+
+Do not tune EMA, breakout, stoploss, startup count, or other strategy parameters using Validation performance.
+
+Next step:
+
+```text
+Validation: 2023-01-01 — 2024-12-31
+```
+
+Validation should be used only to measure how the already-locked strategy behaves on unseen historical data.

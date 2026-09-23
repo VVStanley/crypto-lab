@@ -32,3 +32,6 @@ config:
 
 doctor:
 	./scripts/doctor.sh
+
+sensitivity-check:
+	./scripts/sensitivity-check.sh
