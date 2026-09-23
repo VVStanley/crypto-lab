@@ -59,5 +59,26 @@ echo "$timeframes" | grep -qw "4h" \
     && ok "4h timeframe" \
     || fail "4h timeframe unavailable"
 
+if [ -f user_data/data/binance/BTC_USDT-4h.feather ]; then
+    echo "== Backtest runtime smoke test =="
+
+    if docker compose run --rm bot backtesting \
+        --config /freqtrade/configs/base.json \
+        --config /freqtrade/configs/strategies/trend_breakout_btc_4h.json \
+        --config /freqtrade/configs/modes/dry-run.json \
+        --strategy TrendBreakoutV1 \
+        --timerange 20180101-20180401 \
+        >/tmp/crypto-lab-backtest-smoke.log 2>&1; then
+
+        ok "Backtest runtime"
+
+    else
+        cat /tmp/crypto-lab-backtest-smoke.log >&2
+        fail "Backtest runtime"
+    fi
+else
+    echo "[SKIP] Backtest runtime — historical data not downloaded"
+fi
+
 echo
 echo "Environment looks healthy."

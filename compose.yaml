@@ -1,6 +1,6 @@
 services:
   bot:
-    image: ${FREQTRADE_IMAGE:-freqtradeorg/freqtrade:stable}
+    image: ${FREQTRADE_IMAGE:-freqtradeorg/freqtrade:2026.8}
     restart: unless-stopped
     volumes:
       - ./user_data:/freqtrade/user_data
