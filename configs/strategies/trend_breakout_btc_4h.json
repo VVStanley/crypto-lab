@@ -1,0 +1,10 @@
+{
+  "max_open_trades": 1,
+  "stake_amount": 20,
+  "available_capital": 30,
+  "exchange": {
+    "pair_whitelist": [
+      "BTC/USDT"
+    ]
+  }
+}

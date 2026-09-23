@@ -1,0 +1,66 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment / secrets
+.env
+.env.*
+!.env.example
+
+configs/secrets.json
+configs/*secrets*.json
+!configs/secrets.example.json
+
+# Freqtrade runtime data
+user_data/logs/
+user_data/data/
+user_data/backtest_results/
+user_data/hyperopt_results/
+user_data/plot/
+user_data/*.sqlite
+user_data/*.sqlite-shm
+user_data/*.sqlite-wal
+
+# Local databases
+*.sqlite
+*.sqlite3
+*.db
+*.db-shm
+*.db-wal
+
+# Generated research output
+results/*
+!results/.gitkeep
+
+reports/generated/*
+!reports/generated/.gitkeep
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+*.log
+
+# Docker/local overrides
+compose.override.yaml
+docker-compose.override.yml

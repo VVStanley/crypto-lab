@@ -1,0 +1,14 @@
+services:
+  bot:
+    command:
+      - trade
+      - --config
+      - /freqtrade/configs/base.json
+      - --config
+      - /freqtrade/configs/strategies/trend_breakout_btc_4h.json
+      - --config
+      - /freqtrade/configs/modes/live.json
+      - --config
+      - /freqtrade/secrets/binance.json
+      - --strategy
+      - TrendBreakoutV1

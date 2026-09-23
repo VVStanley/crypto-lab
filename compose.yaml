@@ -1,0 +1,18 @@
+services:
+  bot:
+    image: ${FREQTRADE_IMAGE:-freqtradeorg/freqtrade:stable}
+    restart: unless-stopped
+    volumes:
+      - ./user_data:/freqtrade/user_data
+      - ./configs:/freqtrade/configs:ro
+      - ./secrets:/freqtrade/secrets:ro
+    command:
+      - trade
+      - --config
+      - /freqtrade/configs/base.json
+      - --config
+      - /freqtrade/configs/strategies/trend_breakout_btc_4h.json
+      - --config
+      - /freqtrade/configs/modes/dry-run.json
+      - --strategy
+      - TrendBreakoutV1

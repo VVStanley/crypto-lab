@@ -1,0 +1,5 @@
+{
+  "dry_run": true,
+  "dry_run_wallet": 30,
+  "db_url": "sqlite:////freqtrade/user_data/db/trend-breakout-v1-dry.sqlite"
+}
