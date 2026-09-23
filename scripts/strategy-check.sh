@@ -10,7 +10,9 @@ docker compose run --rm bot list-strategies
 
 echo "== lookahead-analysis =="
 # shellcheck disable=SC2086
-docker compose run --rm bot lookahead-analysis $COMMON_ARGS
+docker compose run --rm bot lookahead-analysis \
+    $COMMON_ARGS \
+    --config /freqtrade/configs/modes/lookahead.json
 
 echo "== recursive-analysis =="
 # shellcheck disable=SC2086

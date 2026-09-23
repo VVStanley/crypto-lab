@@ -18,7 +18,7 @@ class TrendBreakoutV1(IStrategy):
     timeframe = "4h"
     can_short = False
     process_only_new_candles = True
-    startup_candle_count = 220
+    startup_candle_count = 499
 
     # Exit decisions are signal-driven. The stoploss is an emergency risk bound.
     minimal_roi = {}

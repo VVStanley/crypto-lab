@@ -137,10 +137,94 @@ Used to validate changes derived from the research period.
 
 Must not be used for parameter tuning.
 
-
 ### Final holdout
 
 ```text
 2026-07-01 — 2026-09-22
 ```
+
 Kept untouched until the strategy has passed the previous research gates.
+
+## Research results
+
+### Baseline backtest
+
+Freqtrade version:
+
+```text
+2026.8
+```
+
+Timerange:
+
+```text
+2018-01-01 — 2022-12-31
+```
+
+Result:
+
+- Trades: 62
+- Average profit per trade: +4.62%
+- Total profit: +57.181 USDT
+- Total profit: +190.60%
+- Starting balance: 30 USDT
+- Final balance: 87.181 USDT
+- CAGR: 23.77%
+- Win rate: 45.2%
+- Profit factor: 3.72
+- Expectancy: 0.92
+- Best trade: +88.07%
+- Worst trade: -6.19%
+- Average trade duration: 6 days, 20:19
+- Closed-trade max drawdown: 3.87%
+- Wallet-balance max drawdown: 19.16%
+- Wallet-balance drawdown duration: 197 days, 12:00
+- Market change over the same period: +23.29%
+
+The baseline is interesting enough to continue researching, but the result must not be treated as expected future return.
+
+A large winning trade contributed materially to the result, so concentration of profit in the best trades must be checked before promotion.
+
+### Lookahead analysis
+
+The dedicated Freqtrade lookahead-analysis completed successfully on the Research period.
+
+Result:
+
+- Signals checked: 20
+- Lookahead bias: No
+- Biased entry signals: 0
+- Biased exit signals: 0
+- Biased indicators: none reported
+
+The analysis uses its own market-order test configuration and enlarged analysis capital so wallet sizing does not prevent bias detection. These settings are test-only and do not change normal backtest, dry-run, or live trading configuration.
+
+### Recursive analysis
+
+Result:
+
+- Indicator lookahead bias: No
+- `ema_fast` difference at `startup_candle_count = 220`: -0.001%
+- `ema_slow` difference at `startup_candle_count = 220`: -0.657%
+- `ema_slow` difference at 399 startup candles: +0.475%
+- `ema_slow` difference at 499 startup candles: +0.002%
+- `ema_slow` difference at 999 startup candles: 0.000%
+
+The current `startup_candle_count = 220` is enough to run the strategy, but EMA(200) is not yet as stable there as it is with a larger startup window.
+
+This must be reviewed and finalized during the Research stage before opening the Validation window.
+
+## Current research conclusion
+
+TrendBreakoutV1 has passed the initial lookahead-bias checks and produced a positive historical baseline on the predefined Research period.
+
+The strategy is not yet promoted to Validation.
+
+Before Validation:
+
+1. decide whether `startup_candle_count` should be increased for EMA(200) stability;
+2. if the strategy runtime changes, rerun the Research baseline and bias checks;
+3. inspect trade-result concentration, including dependence on the best few trades;
+4. record the final Research-stage decision without using Validation, Out-of-sample, or Final holdout performance for tuning.
+
+Do not inspect later evaluation windows until the Research-stage configuration is finalized.
