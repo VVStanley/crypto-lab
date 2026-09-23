@@ -108,3 +108,39 @@ Timerange: <range>
 Result artifact: <path>
 Conclusion: <keep / revise / reject>
 ```
+
+## Evaluation windows
+
+The historical dataset is split before inspecting strategy performance.
+
+### Research
+
+```text
+2018-01-01 — 2022-12-31
+```
+
+Used for initial hypothesis evaluation and investigation.
+
+### Validation
+
+```text
+2023-01-01 — 2024-12-31
+```
+
+Used to validate changes derived from the research period.
+
+### Out-of-sample
+
+```text
+2025-01-01 — 2026-06-30
+```
+
+Must not be used for parameter tuning.
+
+
+### Final holdout
+
+```text
+2026-07-01 — 2026-09-22
+```
+Kept untouched until the strategy has passed the previous research gates.
