@@ -41,6 +41,10 @@ user_data/*.sqlite
 user_data/*.sqlite-shm
 user_data/*.sqlite-wal
 
+# Runtime secrets
+secrets/*
+!secrets/.gitkeep
+
 # Local databases
 *.sqlite
 *.sqlite3
