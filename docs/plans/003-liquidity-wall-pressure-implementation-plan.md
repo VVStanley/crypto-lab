@@ -423,6 +423,8 @@ btcusdt@aggTrade
 
 Use the REST depth snapshot to initialize/resynchronize the local book according to Binance update-ID sequencing rules.
 
+Every REST depth snapshot actually used to seed or resynchronize the local book must also be normalized and persisted as raw replay evidence. Offline replay must never depend on refetching a historical snapshot from Binance.
+
 No API key is required.
 
 ## Collector requirements
@@ -430,10 +432,12 @@ No API key is required.
 The Binance adapter must:
 
 - receive diff-depth and aggTrade streams;
-- record exchange timestamp and local receive timestamp;
+- record depth event time and local receive timestamp;
+- preserve both aggTrade event time (`E`) and trade time (`T`) plus local receive timestamp;
 - preserve update IDs/trade IDs;
 - buffer depth events while obtaining the initial snapshot;
 - align snapshot and stream sequence correctly;
+- persist the exact snapshot used for each initial sync/resync before relying on it for replay;
 - discard obsolete updates;
 - detect sequence gaps;
 - reconnect/resynchronize after invalid state;
@@ -452,6 +456,7 @@ Suggested structure:
 ```text
 user_data/orderflow/raw/depth/BTCUSDT/YYYY-MM-DD/HH.*
 user_data/orderflow/raw/trades/BTCUSDT/YYYY-MM-DD/HH.*
+user_data/orderflow/raw/snapshots/BTCUSDT/YYYY-MM-DD/HH.*
 ```
 
 Requirements:
@@ -459,11 +464,14 @@ Requirements:
 - append-only active segment;
 - hourly rotation;
 - deterministic/versioned serialization;
+- synchronization snapshots are first-class raw records and retain `lastUpdateId`, book levels and local receive time;
 - preserve ordering fields and timestamps;
 - flush/close safely;
 - streaming time-range reader;
 - malformed/truncated data detected or surfaced rather than silently ignored;
 - no requirement to load an entire day into RAM.
+
+Replay must be able to bootstrap from a persisted snapshot and the buffered depth updates that follow it. A raw archive containing only WebSocket deltas is insufficient for deterministic reconstruction.
 
 Create reusable storage contract tests so a future ClickHouse adapter can prove equivalent application-facing behavior where appropriate.
 
@@ -521,11 +529,12 @@ This batch needs meaningful automated coverage around:
 ```text
 message normalization
 snapshot alignment
+snapshot persistence and replay bootstrap
 normal depth sequence
 duplicate/old depth updates
 gap detection/resync
 raw append/read/rotation
-preserved IDs/timestamps
+preserved IDs/event-time/trade-time/receive-time
 local-book updates/removals
 live/replay reconstruction parity
 replay determinism
@@ -1037,10 +1046,10 @@ This implementation plan is complete only when the following statement is true:
 The final technical pipeline is:
 
 ```text
-Binance public depth + aggTrade
+Binance public depth + aggTrade + REST sync snapshots
               |
               v
-      normalized raw events
+ normalized raw records/events
               |
               v
  compressed immutable archive

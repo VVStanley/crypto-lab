@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "exchange": "binance",
+  "market": "spot",
+  "symbol": "BTCUSDT",
+  "streams": {
+    "depth": "btcusdt@depth@100ms",
+    "agg_trade": "btcusdt@aggTrade"
+  },
+  "snapshot": {
+    "limit": 5000
+  },
+  "storage": {
+    "raw_root": "user_data/orderflow/raw",
+    "derived_root": "user_data/orderflow/derived",
+    "reports_root": "user_data/orderflow/reports",
+    "raw_rotation_minutes": 60
+  },
+  "research": {
+    "outcome_horizons_seconds": [5, 15, 60, 300],
+    "wall_detector_parameters_locked": false
+  }
+}

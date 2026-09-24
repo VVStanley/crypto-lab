@@ -41,6 +41,9 @@ user_data/*.sqlite
 user_data/*.sqlite-shm
 user_data/*.sqlite-wal
 
+# Order-flow research runtime/generated data
+user_data/orderflow/
+
 # Runtime secrets
 secrets/*
 !secrets/.gitkeep
@@ -68,3 +71,6 @@ temp/
 # Docker/local overrides
 compose.override.yaml
 docker-compose.override.yml
+
+# User
+.diff.txt

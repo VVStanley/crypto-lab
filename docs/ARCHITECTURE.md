@@ -8,10 +8,10 @@ This document intentionally fixes the architecture so the project can evolve wit
 
 Build a reproducible pipeline that lets us:
 
-1. express a trading hypothesis as deterministic strategy code;
-2. backtest it on historical data;
-3. test for obvious backtest flaws and fragility;
-4. run it against the live market with simulated funds;
+1. express a trading hypothesis as deterministic strategy/research code;
+2. test it on historical or recorded market data appropriate to that hypothesis;
+3. test for obvious backtest/research flaws and fragility;
+4. run validated executable strategies against the live market with simulated funds;
 5. promote one strategy to a very small real-money allocation;
 6. add future strategies without changing the execution foundation.
 
@@ -24,14 +24,17 @@ MVP supports:
 - exchange: Binance;
 - market: Spot;
 - initial pair: BTC/USDT;
-- initial timeframe: 4h;
-- execution/backtest engine: Freqtrade;
-- packaging/runtime: Docker Compose;
-- persistence: one SQLite database per running bot instance;
-- strategy language: Python;
+- candle execution/backtest engine: Freqtrade;
+- research-only public market-data collectors when a hypothesis needs data Freqtrade candle history cannot reproduce;
+- packaging/runtime: Docker Compose for the trading bot;
+- Freqtrade runtime persistence: one SQLite database per running bot instance;
+- research raw-data archive: immutable compressed files;
+- derived analytical datasets: Parquet;
+- local analytical SQL: DuckDB;
+- strategy/research language: Python;
 - one live strategy at a time;
 - dry-run before live;
-- Git as the source of truth for strategy versions.
+- Git as the source of truth for strategy/research code and experiment definitions.
 
 MVP explicitly excludes:
 
@@ -40,34 +43,37 @@ MVP explicitly excludes:
 - automatic portfolio allocator across strategies;
 - FastAPI control plane;
 - PostgreSQL;
+- MongoDB;
 - Redis/queues;
+- Kafka;
 - Kubernetes;
 - custom web dashboard;
 - ML/LLM trading decisions;
 - automatic promotion of strategies to live;
-- simultaneous live strategies sharing one wallet.
+- simultaneous live strategies sharing one wallet;
+- ClickHouse deployment before the research volume demonstrates a concrete need.
 
 ## 3. Technology decisions
 
 ### Freqtrade
 
-Freqtrade owns:
+Freqtrade owns all trading execution responsibilities:
 
-- market data integration used by the bot;
+- market data integration used by the trading bot;
 - exchange integration;
 - exchange trading filters/minimums;
 - order placement/cancellation;
 - trade lifecycle;
 - stoploss order integration;
 - dry-run wallet simulation;
-- backtesting;
+- candle backtesting;
 - runtime trade persistence.
 
-We do not reimplement these responsibilities in MVP.
+Research-only collectors do **not** replace Freqtrade execution. They may ingest public microstructure data for experiments that cannot be reproduced from OHLCV candles.
 
 ### Python
 
-Python strategy classes own:
+Executable Freqtrade strategy classes own:
 
 - indicators;
 - entry signals;
@@ -75,25 +81,56 @@ Python strategy classes own:
 - strategy-level stoploss definition;
 - explainable signal tags.
 
-Strategies must remain deterministic and reproducible from candle data and configuration.
+Research-only Python code may own:
+
+- public market-data normalization;
+- deterministic market reconstruction;
+- feature extraction;
+- event detection;
+- outcome labeling;
+- reproducible analysis.
+
+No LLM/AI call belongs in a trading or signal-generation loop.
 
 ### Docker Compose
 
-Docker Compose is the deployment mechanism for local dry-run and the first VPS deployment.
+Docker Compose is the deployment mechanism for local dry-run and the first VPS deployment of the trading bot.
 
 No orchestrator is added until running multiple long-lived instances becomes an actual operational problem.
 
+Research collectors may be packaged later when long-running collection is needed; that does not transfer execution ownership away from Freqtrade.
+
 ### SQLite
 
-Each bot instance gets its own SQLite database.
+Each Freqtrade bot instance gets its own SQLite database.
 
-SQLite contains runtime/trade state. It is **not** the source of truth for strategy code or experiment definitions.
+SQLite contains bot runtime/trade state. It is **not** the source of truth for strategy code, research datasets or experiment definitions.
+
+### Research storage
+
+Order-flow research separates raw evidence from derived analytics.
+
+MVP storage:
+
+```text
+raw public exchange events + sync snapshots -> immutable compressed files
+derived research datasets                -> Parquet
+analytical queries          -> DuckDB SQL over Parquet
+```
+
+Raw archives are append-only evidence used for deterministic replay. Every REST depth snapshot actually used to seed or resynchronize the local book must be persisted together with subsequent normalized stream events; otherwise an offline replay would not have the same starting state. Derived datasets may be rebuilt from the raw archive when feature logic changes.
+
+Persistence is accessed through narrow ports and constructor dependency injection. Domain/application logic must not depend directly on filesystem, Parquet, DuckDB or future ClickHouse details.
+
+ClickHouse is a future infrastructure adapter, not a current dependency. A future migration must not require rewriting market reconstruction, wall detection, feature semantics or experiment protocol.
+
+Even after a future analytical-database migration, immutable raw archives may remain the replay/source-of-truth layer.
 
 ### Git
 
-Git is the only strategy-version history.
+Git is the source of truth for strategy/research code and experiment definitions.
 
-A historical strategy is recovered by checking out the Git commit used for the experiment. We do not store Python source snapshots in a database.
+A historical implementation is recovered by checking out the Git commit used for the experiment. We do not store Python source snapshots in a database.
 
 ## 4. Configuration ownership
 
@@ -113,7 +150,7 @@ It must not contain secrets or strategy-specific tuning.
 
 ### `configs/strategies/*.json`
 
-Contains runtime allocation/universe settings for one strategy deployment:
+Contains runtime allocation/universe settings for one executable Freqtrade strategy deployment:
 
 - allowed pair(s);
 - maximum open trades;
@@ -121,6 +158,18 @@ Contains runtime allocation/universe settings for one strategy deployment:
 - capital cap where applicable.
 
 The strategy's trading logic does not live here.
+
+### `configs/research/*.json`
+
+Contains versioned, non-secret research runtime settings such as:
+
+- exchange/market/symbol identity;
+- public stream names;
+- raw/derived output roots;
+- serialization/schema version;
+- research horizons or detector parameters once they are explicitly locked.
+
+It must not contain API secrets or database credentials.
 
 ### `configs/modes/dry-run.json`
 
@@ -142,24 +191,39 @@ Changing live allocation is a financial-risk change and must be explicit.
 
 ### `secrets/binance.json`
 
-Local/VPS-only, gitignored file containing the Binance API credentials.
+Local/VPS-only, gitignored file containing Binance trading API credentials.
 
 Secrets are passed as a final config overlay in live mode.
 
 No secret may appear in:
 
 - strategy Python files;
+- research collectors;
 - tracked config files;
 - experiment documents;
 - Docker image;
 - Git history.
 
+Public order-flow research must not require trading credentials.
+
 ## 5. Strategy source and versioning
 
-Strategies live in:
+Executable Freqtrade strategies live in:
 
 ```text
 user_data/strategies/
+```
+
+Research-only hypotheses may exist before executable strategy code. Their human-readable descriptions live under:
+
+```text
+docs/strategies/
+```
+
+and their evidence/protocol lives under:
+
+```text
+experiments/
 ```
 
 One logical strategy should normally retain one class/file name while it evolves.
@@ -173,19 +237,19 @@ TrendFinal.py
 TrendFinal2.py
 ```
 
-merely to preserve old code.
-
-Git preserves old implementations.
+merely to preserve old code. Git preserves old implementations.
 
 A new class/file is justified when the market hypothesis materially changes, rather than when parameters or implementation details change.
 
 For every meaningful research result, record the Git commit in the experiment notes/results before treating the result as evidence.
 
-## 6. Adding a new strategy
+## 6. Adding a new hypothesis or strategy
 
-Adding a strategy must not require infrastructure changes.
+### Executable candle/Freqtrade strategy
 
-Create:
+When the hypothesis can be implemented and honestly backtested with the existing Freqtrade data model, create the executable strategy/config/experiment artifacts and run the standard Freqtrade research gates.
+
+Typical artifacts:
 
 ```text
 user_data/strategies/NewStrategy.py
@@ -193,36 +257,45 @@ configs/strategies/new-strategy.json
 experiments/NNN-new-strategy.md
 ```
 
-Then run the same research commands used by existing strategies.
+### Research-only strategy
 
-A new strategy must define:
+When the hypothesis requires market data that Freqtrade historical candles cannot reproduce, it may begin with:
 
-- hypothesis;
-- pair/market;
-- timeframe;
-- indicators;
-- entry rule;
-- exit rule;
-- stoploss/risk assumptions;
-- why the hypothesis might have an edge;
-- intended historical evaluation windows.
+```text
+docs/strategies/NNN-strategy.md
+experiments/NNN-strategy.md
+research/<subsystem>/...
+configs/research/...
+```
 
-Do not add a new service/framework simply because a new strategy was added.
+No Freqtrade strategy class should be invented merely to satisfy a file convention before the signal itself has been validated.
+
+A research subsystem is justified only when the required evidence cannot be obtained honestly through the existing pipeline.
 
 ## 7. Research lifecycle
 
-A strategy moves manually through these conceptual states:
+An executable strategy moves manually through these conceptual states:
 
 ```text
 research -> backtested -> robust-enough -> dry-run -> live-candidate -> live
                           \-> rejected
 ```
 
-There is no workflow database in MVP.
+A research-only microstructure hypothesis first moves through:
 
-The experiment Markdown file records the current state and evidence.
+```text
+research-design
+    -> data-quality proven
+    -> research evidence
+    -> validation
+    -> out-of-sample
+    -> executable-strategy design (only if justified)
+    -> dry-run/live gates
+```
 
-### Required research gates before dry-run
+There is no workflow database in MVP. Experiment Markdown files record state and evidence.
+
+### Candle/Freqtrade research gates before dry-run
 
 At minimum:
 
@@ -234,15 +307,84 @@ At minimum:
 6. verify the result is not dependent on one tiny parameter value;
 7. account for fees and realistic execution assumptions.
 
-A positive backtest is not sufficient evidence for live trading.
+### Microstructure/order-flow research gates before executable strategy design
+
+At minimum:
+
+1. prove raw data completeness/sequence integrity;
+2. prove deterministic replay;
+3. define event/features without future information;
+4. lock research parameters/horizons before outcome-driven tuning;
+5. use chronological Research/Validation/OOS windows;
+6. compare against a simple baseline, not only selected successful examples;
+7. measure effect size, stability, event count and latency sensitivity;
+8. account for fees, spread and realistic execution before treating a predictive effect as tradeable.
+
+A positive research report is not sufficient evidence for live trading.
 
 ### Required gate before live
 
-A live candidate must spend a meaningful observation period in dry-run and its behavior must be compared with the assumptions from historical tests.
+A live candidate must spend a meaningful observation period in dry-run and its behavior must be compared with the assumptions from historical/recorded-data tests.
 
 Promotion is always manual.
 
-## 8. Initial live-risk policy
+## 8. Research market-data subsystem
+
+The order-flow subsystem introduced for `LiquidityWallPressureV1` is research-only.
+
+It may:
+
+- consume public Binance Spot depth/trade streams;
+- obtain public REST depth snapshots for reconstruction;
+- normalize exchange payloads into project-owned domain events;
+- preserve immutable raw stream events and the synchronization snapshots actually used;
+- replay them offline;
+- reconstruct a local Level-2 market-by-price book;
+- detect/measure research events;
+- build versioned derived datasets and reports.
+
+It must not:
+
+- use trading credentials;
+- place/cancel orders;
+- manage balances/positions;
+- bypass Freqtrade execution;
+- infer participant identity from public L2 data;
+- claim that a visible price level belongs to a whale/market maker/single order.
+
+Public Binance L2 is treated as aggregated visible quantity per price level. Participant identity and exact individual-order ownership are outside the evidence available to this subsystem.
+
+### Dependency direction
+
+Research code follows ports/adapters with constructor injection. Import/dependency direction is:
+
+```text
+application -> ports -> domain
+adapters    -> ports -> domain
+bootstrap   -> application + concrete adapters
+```
+
+Domain never imports outward infrastructure. Ports may reference project-owned domain types; application code consumes the ports; adapters implement them.
+
+Domain/application code must not import:
+
+- Binance client libraries or Binance JSON payload types;
+- DuckDB;
+- Parquet implementation libraries;
+- ClickHouse clients;
+- concrete filesystem adapters.
+
+Do not create a universal `DatabaseRepository`, service locator or global database/storage singleton. Use narrow responsibility-specific ports.
+
+### Live acquisition and replay
+
+Live acquisition and historical replay must feed the same normalized domain events into the same reconstruction/feature logic.
+
+Sequence gaps are data-quality failures. They must invalidate/resynchronize the affected order book rather than being silently guessed through.
+
+The same raw input + Git commit + locked config must reproduce the same derived result.
+
+## 9. Initial live-risk policy
 
 MVP real-money exposure is intentionally tiny.
 
@@ -265,11 +407,13 @@ Hard MVP limits:
 
 Increasing capital requires an explicit config change and review of accumulated evidence.
 
-## 9. Binance connectivity and API permissions
+## 10. Binance connectivity and API permissions
 
-### Research/backtest
+### Public research/backtest
 
 Public market-data access does not require storing live trading credentials in the repository.
+
+Order-flow collectors must remain on public endpoints unless a future approved architecture change explicitly requires otherwise.
 
 ### Live
 
@@ -291,25 +435,27 @@ Security requirements:
 - never share the secret in chat, tickets, logs or Git;
 - rotate/revoke the key if exposure is suspected.
 
-Binance currently recommends IP restrictions for API keys, and its Spot API documents that trading permission is not enabled by default.
-
 The deployment must not proceed if the VPS cannot have a stable allowlisted public IP.
 
-## 10. Order/exchange rules
+## 11. Order/exchange rules
 
-We do not hardcode Binance minimum quantity, notional or precision values.
+We do not hardcode Binance minimum quantity, notional or precision values for live execution.
 
-Exchange rules are dynamic and must be obtained/handled through the exchange integration. Binance exposes current symbol/execution rules via exchange information endpoints, and Freqtrade/its exchange layer is responsible for honoring them.
+Exchange rules are dynamic and must be obtained/handled through the exchange integration. Freqtrade/its exchange layer is responsible for honoring live trading filters.
 
-For live Binance Spot, the configuration uses stoploss-on-exchange so protective stoploss orders are not dependent solely on the bot process remaining alive. This setting must be revalidated against the current Freqtrade/Binance behavior before the first live launch.
+For live Binance Spot, the configuration uses stoploss-on-exchange so protective stoploss orders are not dependent solely on the bot process remaining alive. This setting must be revalidated against current Freqtrade/Binance behavior before the first live launch.
 
-## 11. Runtime isolation
+## 12. Runtime isolation
 
-### MVP
+### MVP trading
 
 One long-lived bot instance is run at a time for live trading.
 
 Dry-run and live use separate SQLite files.
+
+### Research data
+
+Research raw/derived data is separate from Freqtrade runtime SQLite state and is stored under generated `user_data/` paths that are not committed.
 
 ### Future multi-strategy dry-run
 
@@ -328,38 +474,41 @@ The strategy code/image may be shared.
 
 Do not point multiple independent live bots at one undivided Spot balance and pretend the balance is isolated.
 
-Before simultaneous live strategies are introduced, design real capital isolation (for example exchange-supported subaccounts where available/appropriate) and a clear allocation model.
+Before simultaneous live strategies are introduced, design real capital isolation and a clear allocation model.
 
 That work is outside MVP.
 
-## 12. Monitoring
+## 13. Monitoring
 
-MVP monitoring is intentionally simple:
+MVP trading monitoring is intentionally simple:
 
 - Docker/Freqtrade logs;
 - Freqtrade SQLite trade history;
 - Freqtrade built-in monitoring/Telegram can be enabled when credentials are configured securely.
 
-Do not introduce a custom dashboard in MVP.
+Research collectors should expose textual/data-quality diagnostics sufficient to identify gaps, resyncs and stale data. Do not introduce a custom dashboard in MVP.
 
-A common comparison report is a future convenience layer over reproducible backtest and dry-run results, not a prerequisite for validating the first strategy.
-
-## 13. Deployment
+## 14. Deployment
 
 ### Local workstation
 
 Use for:
 
 - strategy development;
-- historical data download;
+- historical candle download;
 - backtesting;
-- lookahead/recursive analysis.
+- lookahead/recursive analysis;
+- order-flow replay and analysis;
+- short collector/data-quality development runs.
 
 ### VPS
 
-Use for long-running dry-run and live trading.
+Use for:
 
-Requirements:
+- long-running dry-run/live Freqtrade bot;
+- later long-running public order-flow collection when the collector has passed local data-quality checks.
+
+Requirements for trading remain:
 
 - Linux;
 - Docker Engine + Compose plugin;
@@ -370,37 +519,35 @@ Requirements:
 - SSH access;
 - firewall with no unnecessary public Freqtrade UI/API exposure.
 
-Freqtrade UI/API must not be exposed directly to the public internet in MVP. If later enabled, access it through a private network/VPN or SSH tunnel.
+Freqtrade UI/API must not be exposed directly to the public internet in MVP.
 
-## 14. First strategy: `TrendBreakoutV1`
+## 15. Experiment baselines
 
-The first strategy is deliberately simple and explainable.
+### Experiment 001 — `TrendBreakoutV1`
 
-Hypothesis:
+The first strategy was a deliberately simple 4h trend-following baseline using EMA 50/200 plus a 20-candle breakout and a 6% emergency stop.
 
-> A breakout above a recent range has a better chance of continuation when the medium-term trend is already above the long-term trend.
+It passed Research and Validation but failed the predefined OOS gate with negative expectancy/profit factor. It is retained as a comparison baseline and is **rejected for promotion**. See `experiments/001-trend-breakout-btc-4h-final.md`.
 
-Current baseline:
+### Experiment 002 — `PullbackMeanReversionV1`
 
-- pair: BTC/USDT;
-- timeframe: 4h;
-- trend: EMA 50 > EMA 200;
-- breakout: close above the highest high of the previous 20 completed candles;
-- entry requires positive volume;
-- exit on close below EMA 50 or EMA 50 below EMA 200;
-- emergency stoploss: 6%;
-- no shorting;
-- no fixed ROI exit.
+A 1h pullback/recovery hypothesis designed to test a different payoff source with potentially more frequent observations. Status: design / not tested. See `experiments/002-pullback-mean-reversion-btc-1h.md`.
 
-These numbers are research hypotheses, not production truths. Parameter changes must be evaluated as experiments rather than silently optimized against all available history.
+### Experiment 003 — `LiquidityWallPressureV1`
 
-## 15. Change policy
+A research-only order-flow hypothesis that studies breakout versus rejection around unusually large visible liquidity using depth/trade dynamics. It requires recorded L2 + trade-flow data before an executable trading strategy can be justified. See `experiments/003-liquidity-wall-pressure.md`.
+
+Human-readable strategy summaries live in `docs/strategies/`.
+
+## 16. Change policy
 
 Architecture changes require updating this document first when they affect any of:
 
 - market type/exchange;
-- persistence model;
+- persistence model or persistence ownership;
 - strategy/config ownership;
+- research data acquisition;
+- dependency boundaries;
 - runtime topology;
 - secret management;
 - live-risk boundaries;
@@ -408,21 +555,24 @@ Architecture changes require updating this document first when they affect any o
 - promotion workflow;
 - technology stack.
 
+A persistence-adapter change does **not** by itself justify changing domain/application behavior or Freqtrade execution ownership.
+
 A feature request alone is not justification to add infrastructure.
 
-The default decision is to keep MVP architecture unchanged until observed usage demonstrates a concrete limitation.
+The default decision is to keep the MVP architecture unchanged until observed usage demonstrates a concrete limitation.
 
-## 16. Definition of Done for MVP
+## 17. Definition of Done for MVP
 
 MVP is complete when we can:
 
-1. add a new Python strategy without changing infrastructure;
-2. run repeatable historical tests;
-3. run lookahead and recursive analyses;
-4. preserve strategy history through Git;
-5. run the selected strategy continuously in dry-run;
+1. add a new executable Python strategy without changing the trading infrastructure;
+2. define a research-only hypothesis without prematurely inventing execution code;
+3. run repeatable historical/recorded-data tests appropriate to the hypothesis;
+4. preserve strategy/research history through Git;
+5. run the selected executable strategy continuously in dry-run;
 6. inspect its actions/trades after restart;
-7. safely configure Binance credentials outside Git;
+7. safely configure Binance trading credentials outside Git;
 8. manually promote one validated strategy to live;
 9. constrain first live exposure to the agreed small capital allocation;
-10. stop/restart the bot without losing trade state.
+10. stop/restart the bot without losing trade state;
+11. record and deterministically replay public microstructure data when a hypothesis requires it, without coupling research logic to one analytical database.

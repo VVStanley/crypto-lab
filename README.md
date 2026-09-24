@@ -7,36 +7,39 @@ The MVP is intentionally narrow:
 - Binance Spot only
 - BTC/USDT only
 - no leverage, futures, shorts, ML or LLM decisions
-- Freqtrade is the trading/backtesting engine
+- Freqtrade remains the trading/backtesting/execution engine
 - one live strategy at a time
-- strategies are Python code versioned in Git
-- runtime state is isolated in SQLite
+- Git is the source of truth for strategy/research code and experiment definitions
+- trading runtime state is isolated in SQLite
+- research-only collectors may record public market microstructure data when candles are insufficient
 - secrets never enter Git
 
 ## Authority
 
 `docs/ARCHITECTURE.md` is the canonical architecture document.
 
-Before changing infrastructure, configuration layout, strategy lifecycle, secret handling, live-trading safety, or runtime isolation, update and review `docs/ARCHITECTURE.md` first.
+Before changing infrastructure, configuration layout, strategy lifecycle, research-data ownership, secret handling, live-trading safety, persistence boundaries or runtime isolation, update and review `docs/ARCHITECTURE.md` first.
 
 Coding agents must read `AGENTS.md` before working in this repository.
 
-## First strategy
+## Strategy catalog
 
-`TrendBreakoutV1` is a research baseline, not a proven profitable strategy.
+Human-readable descriptions and current status live in:
 
-It uses:
+```text
+docs/strategies/README.md
+```
 
-- 4h candles
-- EMA 50 / EMA 200 trend filter
-- breakout above the previous 20-candle high
-- exit on loss of EMA 50 or bearish EMA regime
-- fixed 6% emergency stoploss
-- no ROI take-profit
+Current strategy/research catalog:
 
-The purpose of V1 is to give the project a simple, explainable strategy with which to validate the research pipeline.
+1. `TrendBreakoutV1` — completed research baseline; rejected for promotion after OOS failure.
+2. `PullbackMeanReversionV1` — design / not tested.
+3. `LiquidityWallPressureV1` — order-flow research/data collection.
+4. `RandomEntryBreakevenV1` — idea / not researched.
 
-## Quick start
+Experiment evidence/protocol remains under `experiments/`.
+
+## Existing candle/Freqtrade workflow
 
 Requirements:
 
@@ -56,7 +59,7 @@ Download BTC/USDT 4h candles:
 make download
 ```
 
-Run a backtest:
+Run the existing TrendBreakout backtest:
 
 ```bash
 make backtest
@@ -86,9 +89,33 @@ Stop the bot:
 make stop
 ```
 
+## Order-flow research
+
+Experiment 003 introduces a separate **research-only** subsystem under:
+
+```text
+research/orderflow/
+```
+
+It exists because historical OHLCV candles cannot reconstruct the Level-2 order-book behavior required by `LiquidityWallPressureV1`.
+
+The subsystem is deliberately separated from execution:
+
+```text
+public Binance market data
+        -> immutable raw archive
+        -> deterministic replay
+        -> wall/features research
+        -> Parquet/DuckDB analytics
+```
+
+It does not place orders, use trading credentials or replace Freqtrade.
+
+Batch 1 establishes only the architecture/domain/DI foundation. Binance collection and storage adapters are added in the next implementation batch.
+
 ## Live trading
 
-Do not start live mode until the strategy has completed the research gates in `docs/ARCHITECTURE.md`.
+Do not start live mode until the selected executable strategy has completed the research gates in `docs/ARCHITECTURE.md`.
 
 When ready:
 
@@ -115,27 +142,38 @@ LIVE_TRADING_CONFIRMED=YES make live
 ├── Makefile
 ├── docs/
 │   ├── ARCHITECTURE.md
-│   └── ROADMAP.md
+│   ├── ROADMAP.md
+│   ├── plans/
+│   │   └── 003-liquidity-wall-pressure-implementation-plan.md
+│   └── strategies/
+│       ├── README.md
+│       ├── 001-trend-breakout-v1.md
+│       ├── 002-pullback-mean-reversion-v1.md
+│       ├── 003-liquidity-wall-pressure-v1.md
+│       └── 004-random-entry-breakeven-v1.md
 ├── configs/
 │   ├── base.json
 │   ├── modes/
-│   │   ├── dry-run.json
-│   │   └── live.json
 │   ├── strategies/
-│   │   └── trend_breakout_btc_4h.json
+│   ├── research/
+│   │   └── orderflow_btcusdt.json
 │   └── secrets.example.json
 ├── experiments/
-│   └── 001-trend-breakout-btc-4h.md
+│   ├── 001-trend-breakout-btc-4h-final.md
+│   ├── 002-pullback-mean-reversion-btc-1h.md
+│   └── 003-liquidity-wall-pressure.md
+├── research/
+│   └── orderflow/
+│       ├── domain/
+│       ├── application/
+│       ├── ports/
+│       └── bootstrap.py
 ├── scripts/
-│   ├── backtest.sh
-│   ├── download-data.sh
-│   ├── live.sh
-│   └── strategy-check.sh
 ├── secrets/                  # ignored by Git
 └── user_data/
     ├── strategies/
-    │   └── TrendBreakoutV1.py
     ├── data/                 # ignored/generated
-    ├── db/                   # ignored/generated
-    └── backtest_results/     # ignored/generated
+    ├── db/
+    ├── backtest_results/     # ignored/generated
+    └── orderflow/            # ignored/generated research data
 ```
